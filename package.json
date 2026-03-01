@@ -1,0 +1,15 @@
+{
+  "name": "trackto",
+  "version": "4.0.0",
+  "description": "Live TTC vehicle tracker — Toronto Transit Commission real-time map",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["ttc", "toronto", "transit", "realtime", "map"],
+  "license": "MIT"
+}

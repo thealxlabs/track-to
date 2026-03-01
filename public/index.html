@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>TrackTO — Live TTC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="splash">
+  <div class="spl-ic">🚌</div>
+  <div class="spl-nm">TrackTO</div>
+  <div class="spl-sub">Toronto Transit — Live</div>
+  <div class="spl-load"><div class="spin"></div>Loading…</div>
+</div>
+
+<header>
+  <a class="logo" href="/">
+    <div class="logo-ic">🚌</div>
+    <div><div class="logo-nm">TrackTO</div><div class="logo-v">v4.0 · Public API</div></div>
+  </a>
+  <div class="srch">
+    <span class="si">⌕</span>
+    <input id="searchInput" type="text" placeholder="Search routes…" oninput="onSearch(this.value)" autocomplete="off">
+  </div>
+  <div class="hdr-r">
+    <button class="hbtn on" id="vb-routes" onclick="showView('routes',this)">Routes</button>
+    <button class="hbtn" id="vb-subway" onclick="showView('subway',this)">🚇 Lines</button>
+    <button class="hbtn" id="vb-alerts" onclick="showView('alerts',this)">Alerts</button>
+    <button class="hbtn" id="vb-api" onclick="showView('api',this)">API</button>
+    <button class="ibtn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    <a class="ibtn" href="/api/docs" target="_blank" title="API docs">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zm-3 0A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5h-2z"/></svg>
+    </a>
+  </div>
+</header>
+
+<aside>
+  <div class="tabs" id="tab-bar">
+    <div class="tab on"  id="tab-all"    onclick="switchTab('all',this)">All</div>
+    <div class="tab"     id="tab-stops"  onclick="switchTab('stops',this)">Stops</div>
+    <div class="tab"     id="tab-fav"    onclick="switchTab('fav',this)">★ Saved</div>
+    <div class="tab"     id="tab-nearby" onclick="switchTab('nearby',this)">Nearby</div>
+    <div class="tab"     id="tab-bunch"  onclick="switchTab('bunch',this)">Bunching</div>
+    <div class="tab"     id="tab-trip"   onclick="switchTab('trip',this)">Trip</div>
+  </div>
+
+  <!-- All routes -->
+  <div class="panel on" id="p-all">
+    <div class="loader" id="rl-spin"><div class="spin"></div>Loading routes…</div>
+  </div>
+
+  <!-- Stop search -->
+  <div class="panel" id="p-stops">
+    <div class="stop-srch">
+      <input id="stop-q" type="text" placeholder="Stop name or number…" onkeydown="if(event.key==='Enter')searchStops()">
+      <button onclick="searchStops()">Search</button>
+    </div>
+    <div id="stop-results"><div class="empty"><div class="empty-ic">🔍</div>Search for a stop by name or number.</div></div>
+  </div>
+
+  <!-- Saved stops dashboard -->
+  <div class="panel" id="p-fav">
+    <div class="empty" id="fav-empty"><div class="empty-ic">★</div>Save stops to see live countdowns here.</div>
+    <div id="fav-list"></div>
+  </div>
+
+  <!-- Nearby -->
+  <div class="panel" id="p-nearby">
+    <div class="loader" id="nb-spin"><div class="spin"></div>Getting location…</div>
+    <div id="nb-list" style="display:none"></div>
+  </div>
+
+  <!-- Bunching -->
+  <div class="panel" id="p-bunch">
+    <div class="loader" id="bn-spin"><div class="spin"></div>Detecting bunching…</div>
+    <div id="bn-list" style="display:none"></div>
+  </div>
+
+  <!-- Trip planner -->
+  <div class="panel" id="p-trip">
+    <div class="trip-form">
+      <div class="trip-inp">
+        <label>From stop (tag or number)</label>
+        <input id="trip-from" placeholder="e.g. 3318 or Spadina Station" onkeydown="if(event.key==='Enter')planTrip()">
+      </div>
+      <div class="trip-inp">
+        <label>To stop (tag or number)</label>
+        <input id="trip-to" placeholder="e.g. 3007 or King at Bay" onkeydown="if(event.key==='Enter')planTrip()">
+      </div>
+      <button class="trip-btn" onclick="planTrip()">Find Routes</button>
+    </div>
+    <div id="trip-result"><div class="empty"><div class="empty-ic">🗺</div>Enter two stops to find connecting routes.</div></div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="panel" id="p-alerts"><div class="loader" id="al-spin"><div class="spin"></div>Loading…</div></div>
+
+  <!-- Subway lines -->
+  <div class="panel" id="p-subway"><div class="loader" id="sw-spin"><div class="spin"></div>Loading…</div></div>
+
+  <!-- API explorer -->
+  <div class="panel" id="p-api" style="overflow-y:auto">
+    <div style="padding:12px;border-bottom:1px solid var(--bd);flex-shrink:0">
+      <div style="font-size:13px;font-weight:700;color:var(--st);margin-bottom:2px">TrackTO Public API</div>
+      <div style="font-size:10px;color:var(--mu)">v4.0 · 120 req/min · no auth required</div>
+      <div style="margin-top:7px;display:flex;gap:5px">
+        <a href="/api/docs" target="_blank" style="font-size:10px;color:var(--ac);text-decoration:none">JSON Spec ↗</a>
+        <span style="color:var(--bd2)">·</span>
+        <span style="font-size:10px;color:var(--mu)">Base: <span style="font-family:'JetBrains Mono',monospace;color:var(--tx)">/api/v1</span></span>
+      </div>
+    </div>
+    <div class="explorer" id="api-explorer"></div>
+  </div>
+
+  <!-- Route detail (slides over panels) -->
+  <div class="dpanel" id="dp">
+    <div class="dpback" onclick="closeDetail()">← Back</div>
+    <div id="dp-content"></div>
+  </div>
+
+  <!-- Arrivals footer -->
+  <div id="foot-wrap" style="display:none">
+    <div class="foot">
+      <div class="foot-lbl">
+        <div class="flive" id="flive" style="display:none"></div>
+        <span id="foot-stop">Tap a stop for arrivals</span>
+      </div>
+      <div class="farr-row">
+        <div class="farr" id="fa0"><div class="farr-n" id="fn0">—</div><div class="farr-sub">Next</div><div class="farr-dir" id="fd0"></div></div>
+        <div class="farr" id="fa1"><div class="farr-n" id="fn1">—</div><div class="farr-sub">Then</div><div class="farr-dir" id="fd1"></div></div>
+        <div class="farr" id="fa2"><div class="farr-n" id="fn2">—</div><div class="farr-sub">After</div><div class="farr-dir" id="fd2"></div></div>
+        <div class="farr" id="fa3"><div class="farr-n" id="fn3">—</div><div class="farr-sub">+1</div><div class="farr-dir"  id="fd3"></div></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<main>
+  <div id="map"></div>
+  <div class="map-tl">
+    <div class="live-pill">
+      <div class="flive"></div>
+      <span>Live</span>
+      <span class="tstamp" id="tstamp">—</span>
+    </div>
+  </div>
+  <div class="map-tr">
+    <button class="fbtn on" id="fl-bus" onclick="toggleLayer('bus',this)">🚌 Buses <span class="cnt" id="cnt-bus">—</span></button>
+    <button class="fbtn on" id="fl-sc"  onclick="toggleLayer('streetcar',this)">🚋 Streetcars <span class="cnt" id="cnt-sc">—</span></button>
+    <button class="fbtn on" id="fl-sub" onclick="toggleLayer('subway',this)">🚇 Subway <span class="cnt" id="cnt-sub">—</span></button>
+    <button class="fbtn" id="fl-bunch"  onclick="toggleBunchLayer()">⚠ Bunching <span class="cnt" id="cnt-bunch">—</span></button>
+    <button class="fbtn"                onclick="locateMe()">📍 My Location</button>
+  </div>
+  <div class="hud">
+    <div class="huds"><div class="hudn" id="hv">—</div><div class="hudl">Vehicles</div></div>
+    <div class="huds"><div class="hudn" id="hr">—</div><div class="hudl">Routes</div></div>
+    <div class="huds"><div class="hudn" id="hs">—</div><div class="hudl">Stale &gt;2m</div></div>
+    <div class="huds"><div class="hudn" id="ha">—</div><div class="hudl">Avg km/h</div></div>
+  </div>
+  <div class="vd" id="vd">
+    <button class="vd-x" onclick="closeVD()">✕</button>
+    <div class="vd-type" id="vd-type"></div>
+    <div class="vd-name" id="vd-name"></div>
+    <div class="vd-dir" id="vd-dir" style="display:none"></div>
+    <div class="vd-grid">
+      <div class="vd-stat"><div class="vd-val" id="vd-spd">—</div><div class="vd-lbl">Speed km/h</div></div>
+      <div class="vd-stat"><div class="vd-val" id="vd-hdg">—</div><div class="vd-lbl">Heading</div></div>
+      <div class="vd-stat"><div class="vd-val" id="vd-st">—</div><div class="vd-lbl">Status</div></div>
+      <div class="vd-stat"><div class="vd-val" id="vd-age">—</div><div class="vd-lbl">Last ping</div></div>
+    </div>
+    <div class="vd-btns">
+      <button class="vdbtn route" onclick="vdGoRoute()">🗺 Route</button>
+      <button class="vdbtn track" id="vd-track" onclick="toggleTrack()">📍 Track</button>
+    </div>
+  </div>
+</main>
+
+<nav class="mnav">
+  <button class="mnb on" onclick="mobileNav('map',this)"><span class="mi">🗺</span>Map</button>
+  <button class="mnb"    onclick="mobileNav('routes',this)"><span class="mi">☰</span>Routes</button>
+  <button class="mnb"    onclick="mobileNav('stops',this)"><span class="mi">🔍</span>Stops</button>
+  <button class="mnb"    onclick="mobileNav('trip',this)"><span class="mi">🗺</span>Trip</button>
+  <button class="mnb"    onclick="mobileNav('alerts',this)"><span class="mi">⚠</span>Alerts</button>
+</nav>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
