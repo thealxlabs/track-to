@@ -17,6 +17,7 @@
 const http  = require("http");
 const https = require("https");
 const fs    = require("fs");
+const path  = require("path");
 
 const PORT       = process.env.PORT || 3000;
 const UMO_BASE   = "https://retro.umoiq.com/service/publicJSONFeed";
@@ -570,27 +571,35 @@ const ROUTES = {
   "/api/docs":              hDocs,
 };
 
-http.createServer(async (req, res) => {
+async function handler(req, res) {
   if (req.method === "OPTIONS") { cors(res); res.writeHead(204); res.end(); return; }
 
   const u   = new URL(req.url, `http://localhost:${PORT}`);
   const q   = Object.fromEntries(u.searchParams);
   const ip  = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress || "unknown";
 
-  // Serve frontend
-  if (u.pathname === "/" || u.pathname === "/index.html") {
-    const html = fs.existsSync("./index.html") ? fs.readFileSync("./index.html") : "<h1>TrackTO</h1>";
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(html);
-    return;
-  }
-
-  // Serve API explorer page
-  if (u.pathname === "/explorer") {
-    const html = fs.existsSync("./explorer.html") ? fs.readFileSync("./explorer.html") : "<h1>No explorer</h1>";
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(html);
-    return;
+  // Serve static files from ./public/
+  if (!u.pathname.startsWith("/api")) {
+    const MIME_TYPES = {
+      ".html": "text/html", ".css": "text/css",
+      ".js":   "application/javascript", ".json": "application/json",
+      ".png":  "image/png", ".svg": "image/svg+xml", ".ico": "image/x-icon",
+    };
+    const filePath = path.join(__dirname, "public", u.pathname === "/" ? "index.html" : u.pathname);
+    if (fs.existsSync(filePath)) {
+      const ext  = path.extname(filePath);
+      const mime = MIME_TYPES[ext] || "application/octet-stream";
+      res.writeHead(200, { "Content-Type": mime });
+      res.end(fs.readFileSync(filePath));
+      return;
+    }
+    // SPA fallback — serve index.html for unknown non-API paths
+    const index = path.join(__dirname, "public", "index.html");
+    if (fs.existsSync(index)) {
+      res.writeHead(200, { "Content-Type": "text/html" });
+      res.end(fs.readFileSync(index));
+      return;
+    }
   }
 
   // Rate limit all /api/* requests
@@ -600,30 +609,38 @@ http.createServer(async (req, res) => {
     if (!rl.ok) return fail(res, `Rate limit exceeded. ${RATE_LIMIT} requests/minute. Resets at ${new Date(rl.reset*1000).toISOString()}.`, 429, "RATE_LIMITED");
   }
 
-  const handler = ROUTES[u.pathname];
-  if (!handler) { fail(res, "Endpoint not found", 404, "NOT_FOUND"); return; }
+  const routeHandler = ROUTES[u.pathname];
+  if (!routeHandler) { fail(res, "Endpoint not found", 404, "NOT_FOUND"); return; }
 
   try {
-    await handler(res, q);
+    await routeHandler(res, q);
   } catch (e) {
     console.error(u.pathname, e.message);
     fail(res, "Internal server error", 500, "INTERNAL_ERROR");
   }
-}).listen(PORT, () => {
-  console.log(`\n▶  TrackTO v4  →  http://localhost:${PORT}`);
-  console.log(`   Frontend:    http://localhost:${PORT}/`);
-  console.log(`   API Explorer:http://localhost:${PORT}/explorer`);
-  console.log(`   API Docs:    http://localhost:${PORT}/api/docs`);
-  console.log(`   Rate limit:  ${RATE_LIMIT} req/min per IP\n`);
-  console.log("   Endpoints:");
-  console.log("   GET /api/v1/vehicles?since=<ts>            delta positions");
-  console.log("   GET /api/v1/vehicles/trail?id=<id>         vehicle trail");
-  console.log("   GET /api/v1/routes                         all routes");
-  console.log("   GET /api/v1/route?tag=501                  route detail + bunching");
-  console.log("   GET /api/v1/arrivals?stop=3318             predictions");
-  console.log("   GET /api/v1/bunching                       bunching system-wide");
-  console.log("   GET /api/v1/subway                         Lines 1-4 status");
-  console.log("   GET /api/v1/stops/search?q=spadina         stop search");
-  console.log("   GET /api/v1/stops/nearby?lat=43.65&lng=-79.38  nearby stops");
-  console.log("   GET /api/v1/trip?from=3318&to=3007         trip planner\n");
-});
+}
+
+// Export handler for Vercel (and other serverless runtimes)
+module.exports = handler;
+
+// Start HTTP server when run directly (node server.js)
+if (require.main === module) {
+  http.createServer(handler).listen(PORT, () => {
+    console.log(`\n▶  TrackTO v4  →  http://localhost:${PORT}`);
+    console.log(`   Frontend:    http://localhost:${PORT}/`);
+    console.log(`   API Explorer:http://localhost:${PORT}/explorer`);
+    console.log(`   API Docs:    http://localhost:${PORT}/api/docs`);
+    console.log(`   Rate limit:  ${RATE_LIMIT} req/min per IP\n`);
+    console.log("   Endpoints:");
+    console.log("   GET /api/v1/vehicles?since=<ts>            delta positions");
+    console.log("   GET /api/v1/vehicles/trail?id=<id>         vehicle trail");
+    console.log("   GET /api/v1/routes                         all routes");
+    console.log("   GET /api/v1/route?tag=501                  route detail + bunching");
+    console.log("   GET /api/v1/arrivals?stop=3318             predictions");
+    console.log("   GET /api/v1/bunching                       bunching system-wide");
+    console.log("   GET /api/v1/subway                         Lines 1-4 status");
+    console.log("   GET /api/v1/stops/search?q=spadina         stop search");
+    console.log("   GET /api/v1/stops/nearby?lat=43.65&lng=-79.38  nearby stops");
+    console.log("   GET /api/v1/trip?from=3318&to=3007         trip planner\n");
+  });
+}
