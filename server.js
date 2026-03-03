@@ -17,6 +17,7 @@
 const http  = require("http");
 const https = require("https");
 const fs    = require("fs");
+const path  = require("path");
 
 const PORT       = process.env.PORT || 3000;
 const UMO_BASE   = "https://retro.umoiq.com/service/publicJSONFeed";
@@ -612,7 +613,7 @@ async function handler(req, res) {
     const ext = u.pathname.match(/\.[^./]+$/)?.[0] || "";
     // For paths with a known static extension, try to serve the file directly
     if (ext && MIME[ext]) {
-      const filePath = `./public${u.pathname}`;
+      const filePath = path.join(__dirname, "public", u.pathname);
       if (fs.existsSync(filePath)) {
         res.writeHead(200, { "Content-Type": MIME[ext] });
         res.end(fs.readFileSync(filePath));
@@ -620,7 +621,7 @@ async function handler(req, res) {
       }
     }
     // SPA fallback: serve index.html for all non-API, non-asset routes
-    const indexPath = "./public/index.html";
+    const indexPath = path.join(__dirname, "public", "index.html");
     if (fs.existsSync(indexPath)) {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(fs.readFileSync(indexPath));
